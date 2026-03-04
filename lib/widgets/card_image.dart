@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/playing_card.dart';
+import '../models/card.dart'; // <--- Fixed this import!
 
 class CardImage extends StatelessWidget {
   final PlayingCard card;

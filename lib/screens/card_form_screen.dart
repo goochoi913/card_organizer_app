@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/playing_card.dart';
+import '../models/card.dart';
 import '../repositories/card_repository.dart';
 
 class CardFormScreen extends StatefulWidget {

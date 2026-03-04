@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/folder.dart';
-import '../models/playing_card.dart';
+import '../models/card.dart';
 import '../repositories/card_repository.dart';
 import '../widgets/card_image.dart';
 import 'card_form_screen.dart';
