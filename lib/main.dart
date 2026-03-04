@@ -1,122 +1,175 @@
 import 'package:flutter/material.dart';
+import 'screens/folders_screen.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const CardOrganizerApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class CardOrganizerApp extends StatelessWidget {
+  const CardOrganizerApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      debugShowCheckedModeBanner: false,
+      title: 'Card Organizer',
+      theme: ThemeData(useMaterial3: true),
+      home: const FoldersScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class FoldersScreen extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _FoldersScreenState createState() => _FoldersScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _FoldersScreenState extends State {
+  final FolderRepository _folderRepository = FolderRepository();
+  final CardRepository _cardRepository = CardRepository();
+  List _folders = [];
+  Map _cardCounts = {};
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _loadFolders();
+  }
+
+  Future _loadFolders() async {
+    final folders = await _folderRepository.getAllFolders();
+    final Map counts = {};
+    
+    for (var folder in folders) {
+      counts[folder.id!] = await _cardRepository.getCardCountByFolder(folder.id!);
+    }
+    
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _folders = folders;
+      _cardCounts = counts;
     });
+  }
+
+  Future _deleteFolder(Folder folder) async {
+    final confirmed = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Folder?'),
+        content: Text(
+          'Are you sure you want to delete "${folder.folderName}"? '
+          'This will also delete all ${_cardCounts[folder.id!]} cards in this folder.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _folderRepository.deleteFolder(folder.id!);
+      _loadFolders();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Folder "${folder.folderName}" deleted')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Text('Card Organizer'),
+        elevation: 0,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+      body: GridView.builder(
+        padding: EdgeInsets.all(16),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.2,
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        itemCount: _folders.length,
+        itemBuilder: (context, index) {
+          final folder = _folders[index];
+          final cardCount = _cardCounts[folder.id!] ?? 0;
+          
+          return Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: InkWell(
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CardsScreen(folder: folder),
+                  ),
+                );
+                _loadFolders(); // Refresh after returning
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _getSuitIcon(folder.folderName),
+                    size: 64,
+                    color: _getSuitColor(folder.folderName),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    folder.folderName,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    '$cardCount cards',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  IconButton(
+                    icon: Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => _deleteFolder(folder),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  IconData _getSuitIcon(String suitName) {
+    switch (suitName) {
+      case 'Hearts': return Icons.favorite;
+      case 'Diamonds': return Icons.change_history;
+      case 'Clubs': return Icons.filter_vintage;
+      case 'Spades': return Icons.eco;
+      default: return Icons.help;
+    }
+  }
+
+  Color _getSuitColor(String suitName) {
+    switch (suitName) {
+      case 'Hearts':
+      case 'Diamonds':
+        return Colors.red;
+      case 'Clubs':
+      case 'Spades':
+        return Colors.black;
+      default:
+        return Colors.grey;
+    }
   }
 }
