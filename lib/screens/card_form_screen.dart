@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/card.dart';
+import '../models/folder.dart';
 import '../repositories/card_repository.dart';
+import '../repositories/folder_repository.dart';
 
 class CardFormScreen extends StatefulWidget {
   final int folderId;
@@ -19,69 +21,85 @@ class CardFormScreen extends StatefulWidget {
 }
 
 class _CardFormScreenState extends State<CardFormScreen> {
-  final _repo = CardRepository();
+  final _cardRepo = CardRepository();
+  final _folderRepo = FolderRepository();
   final _formKey = GlobalKey<FormState>();
 
   final _suits = const ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
   final _ranks = const [
-    'Ace','2','3','4','5','6','7','8','9','10','Jack','Queen','King'
+    'Ace',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    '10',
+    'Jack',
+    'Queen',
+    'King',
   ];
 
   late String _cardName;
   late String _suit;
   late String _imagePathOrUrl;
 
+  List<Folder> _folders = [];
+  int? _selectedFolderId;
+
   @override
   void initState() {
     super.initState();
     final ex = widget.existing;
-
     _cardName = ex?.cardName ?? _ranks.first;
     _suit = ex?.suit ?? widget.initialSuit;
     _imagePathOrUrl = ex?.imageUrl ?? '';
+    _selectedFolderId = ex?.folderId ?? widget.folderId;
+    _loadFolders();
+  }
+
+  Future<void> _loadFolders() async {
+    final f = await _folderRepo.getAllFolders();
+    if (mounted) setState(() => _folders = f);
   }
 
   String _defaultAssetPath(String suit, String rank) {
-    // must match your actual asset filenames
     return 'assets/cards/${suit.toLowerCase()}_${rank.toLowerCase()}.png';
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _selectedFolderId == null) return;
     _formKey.currentState!.save();
 
     final finalImage = _imagePathOrUrl.trim().isEmpty
         ? _defaultAssetPath(_suit, _cardName)
         : _imagePathOrUrl.trim();
 
-    try {
-      if (widget.existing == null) {
-        await _repo.insertCard(
-          PlayingCard(
-            cardName: _cardName,
-            suit: _suit,
-            imageUrl: finalImage,
-            folderId: widget.folderId,
-          ),
-        );
-      } else {
-        await _repo.updateCard(
-          widget.existing!.copyWith(
-            cardName: _cardName,
-            suit: _suit,
-            imageUrl: finalImage,
-            folderId: widget.folderId,
-          ),
-        );
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Save failed: $e')));
+    if (widget.existing == null) {
+      await _cardRepo.insertCard(
+        PlayingCard(
+          cardName: _cardName,
+          suit: _suit,
+          imageUrl: finalImage,
+          folderId: _selectedFolderId!,
+          orderIndex: 999,
+        ),
+      );
+    } else {
+      await _cardRepo.updateCard(
+        widget.existing!.copyWith(
+          cardName: _cardName,
+          suit: _suit,
+          imageUrl: finalImage,
+          folderId: _selectedFolderId!,
+        ),
+      );
     }
+
+    if (!mounted) return;
+    Navigator.pop(context, true);
   }
 
   @override
@@ -97,8 +115,8 @@ class _CardFormScreenState extends State<CardFormScreen> {
           child: ListView(
             children: [
               DropdownButtonFormField<String>(
-                value: _cardName,
-                decoration: const InputDecoration(labelText: 'Card name'),
+                initialValue: _cardName,
+                decoration: const InputDecoration(labelText: 'Card Name'),
                 items: _ranks
                     .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                     .toList(),
@@ -106,7 +124,7 @@ class _CardFormScreenState extends State<CardFormScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _suit,
+                initialValue: _suit,
                 decoration: const InputDecoration(labelText: 'Suit'),
                 items: _suits
                     .map((s) => DropdownMenuItem(value: s, child: Text(s)))
@@ -114,19 +132,33 @@ class _CardFormScreenState extends State<CardFormScreen> {
                 onChanged: (v) => setState(() => _suit = v!),
               ),
               const SizedBox(height: 12),
+              // NEW FOLDER DROPDOWN
+              DropdownButtonFormField<int>(
+                initialValue: _selectedFolderId,
+                decoration: const InputDecoration(
+                  labelText: 'Assign to Folder',
+                ),
+                items: _folders
+                    .map(
+                      (f) => DropdownMenuItem(
+                        value: f.id,
+                        child: Text(f.folderName),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedFolderId = v),
+                validator: (v) => v == null ? 'Please select a folder' : null,
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 initialValue: _imagePathOrUrl,
                 decoration: const InputDecoration(
                   labelText: 'Image path/URL (optional)',
-                  hintText: 'Leave blank to use default asset image',
                 ),
                 onSaved: (v) => _imagePathOrUrl = v ?? '',
               ),
               const SizedBox(height: 20),
-              FilledButton(
-                onPressed: _save,
-                child: const Text('Save'),
-              ),
+              FilledButton(onPressed: _save, child: const Text('Save')),
             ],
           ),
         ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/card.dart'; // <--- Fixed this import!
+import '../models/card.dart';
 
 class CardImage extends StatelessWidget {
   final PlayingCard card;
@@ -16,16 +16,18 @@ class CardImage extends StatelessWidget {
     if (path.startsWith('assets/')) {
       return Image.asset(
         path,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, size: 40)),
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            const Center(child: Icon(Icons.broken_image, size: 40)),
       );
     }
 
     // optional: network URL support
     return Image.network(
       path,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, size: 40)),
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) =>
+          const Center(child: Icon(Icons.broken_image, size: 40)),
     );
   }
 }

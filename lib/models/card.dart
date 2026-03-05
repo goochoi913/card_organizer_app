@@ -4,6 +4,7 @@ class PlayingCard {
   final String suit;
   final String? imageUrl;
   final int folderId;
+  final int orderIndex; // NEW FIELD
 
   PlayingCard({
     this.id,
@@ -11,6 +12,7 @@ class PlayingCard {
     required this.suit,
     this.imageUrl,
     required this.folderId,
+    this.orderIndex = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -20,6 +22,7 @@ class PlayingCard {
       'suit': suit,
       'image_url': imageUrl,
       'folder_id': folderId,
+      'order_index': orderIndex,
     };
   }
 
@@ -30,15 +33,12 @@ class PlayingCard {
       suit: map['suit'],
       imageUrl: map['image_url'],
       folderId: map['folder_id'],
+      orderIndex: map['order_index'] ?? 0,
     );
   }
 
   PlayingCard copyWith({
-    int? id,
-    String? cardName,
-    String? suit,
-    String? imageUrl,
-    int? folderId,
+    int? id, String? cardName, String? suit, String? imageUrl, int? folderId, int? orderIndex,
   }) {
     return PlayingCard(
       id: id ?? this.id,
@@ -46,11 +46,7 @@ class PlayingCard {
       suit: suit ?? this.suit,
       imageUrl: imageUrl ?? this.imageUrl,
       folderId: folderId ?? this.folderId,
+      orderIndex: orderIndex ?? this.orderIndex,
     );
-  }
-
-  @override
-  String toString() {
-    return 'PlayingCard{id: $id, cardName: $cardName, suit: $suit, folderId: $folderId}';
   }
 }

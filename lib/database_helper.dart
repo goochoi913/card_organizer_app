@@ -4,7 +4,6 @@ import 'package:path/path.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-
   DatabaseHelper._init();
 
   Future<Database> get database async {
@@ -16,16 +15,28 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    
+
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // BUMPED TO VERSION 2 to force a clean upgrade
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON'); // CASCADE FIX
+      },
+      onOpen: (db) async {
+        await _createIndexes(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // Automatically wipes and rebuilds the DB for you
+        await db.execute('DROP TABLE IF EXISTS cards');
+        await db.execute('DROP TABLE IF EXISTS folders');
+        await db.execute('DROP TABLE IF EXISTS themes');
+        await _createDB(db, newVersion);
+      },
       onCreate: _createDB,
     );
   }
 
   Future _createDB(Database db, int version) async {
-    // Create Folders table
     await db.execute('''
       CREATE TABLE folders(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +45,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // Create Cards table with foreign key
     await db.execute('''
       CREATE TABLE cards(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,16 +52,35 @@ class DatabaseHelper {
         suit TEXT NOT NULL,
         image_url TEXT,
         folder_id INTEGER,
-        FOREIGN KEY (folder_id) REFERENCES folders (id)
-          ON DELETE CASCADE
+        order_index INTEGER DEFAULT 0, -- FOR DRAG AND DROP
+        FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE CASCADE
       )
     ''');
 
-    // Prepopulate folders
+    await db.execute('''
+      CREATE TABLE themes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        theme_name TEXT NOT NULL,
+        is_active INTEGER NOT NULL
+      )
+    ''');
+
     await _prepopulateFolders(db);
-    
-    // Prepopulate cards
     await _prepopulateCards(db);
+    await _createIndexes(db);
+    await db.insert('themes', {
+      'theme_name': 'Default Light',
+      'is_active': 1,
+    }); // BONUS: THEMES
+  }
+
+  Future<void> _createIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cards_folder_id ON cards(folder_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cards_folder_order ON cards(folder_id, order_index)',
+    );
   }
 
   Future _prepopulateFolders(Database db) async {
@@ -66,16 +95,32 @@ class DatabaseHelper {
 
   Future _prepopulateCards(Database db) async {
     final suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
-    final cards = ['Ace', '2', '3', '4', '5', '6', '7', 
-                   '8', '9', '10', 'Jack', 'Queen', 'King'];
-    
+    final cards = [
+      'Ace',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      'Jack',
+      'Queen',
+      'King',
+    ];
+
     for (int folderId = 1; folderId <= suits.length; folderId++) {
+      int orderIdx = 1;
       for (var card in cards) {
         await db.insert('cards', {
           'card_name': card,
           'suit': suits[folderId - 1],
-          'image_url': 'assets/cards/${suits[folderId - 1].toLowerCase()}_$card.png',
+          'image_url':
+              'assets/cards/${suits[folderId - 1].toLowerCase()}_${card.toLowerCase()}.png',
           'folder_id': folderId,
+          'order_index': orderIdx++, // FIXES SORTING
         });
       }
     }

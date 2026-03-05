@@ -25,19 +25,19 @@ class _FoldersScreenState extends State<FoldersScreen> {
     _loadFolders();
   }
 
-  Future<void> _loadFolders() async {
-    setState(() => _loading = true);
-
-    final folders = await _folderRepository.getAllFolders();
-    final Map<int, int> counts = {};
-
-    for (final folder in folders) {
-      if (folder.id != null) {
-        counts[folder.id!] =
-            await _cardRepository.getCardCountByFolder(folder.id!);
-      }
+  Future<void> _loadFolders({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _loading = true);
     }
 
+    final results = await Future.wait([
+      _folderRepository.getAllFolders(),
+      _cardRepository.getCardCountsByFolder(),
+    ]);
+    final folders = results[0] as List<Folder>;
+    final counts = results[1] as Map<int, int>;
+
+    if (!mounted) return;
     setState(() {
       _folders = folders;
       _cardCounts = counts;
@@ -79,35 +79,22 @@ class _FoldersScreenState extends State<FoldersScreen> {
         SnackBar(content: Text('Folder "${folder.folderName}" deleted')),
       );
 
-      await _loadFolders();
+      await _loadFolders(showLoading: false);
     }
   }
 
-  IconData _getSuitIcon(String suitName) {
+  String _getSuitImagePath(String suitName) {
     switch (suitName) {
       case 'Hearts':
-        return Icons.favorite;
+        return 'assets/cards/hearts_ace.png';
       case 'Diamonds':
-        return Icons.diamond;
+        return 'assets/cards/diamonds_ace.png';
       case 'Clubs':
-        return Icons.local_florist;
+        return 'assets/cards/clubs_ace.png';
       case 'Spades':
-        return Icons.change_history;
+        return 'assets/cards/spades_ace.png';
       default:
-        return Icons.help_outline;
-    }
-  }
-
-  Color _getSuitColor(String suitName) {
-    switch (suitName) {
-      case 'Hearts':
-      case 'Diamonds':
-        return Colors.red;
-      case 'Clubs':
-      case 'Spades':
-        return Colors.black;
-      default:
-        return Colors.grey;
+        return 'assets/cards/back.png'; // Make sure you have a back image too!
     }
   }
 
@@ -117,68 +104,79 @@ class _FoldersScreenState extends State<FoldersScreen> {
       appBar: AppBar(title: const Text('Card Organizer')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.2,
-              ),
-              itemCount: _folders.length,
-              itemBuilder: (_, index) {
-                final folder = _folders[index];
-                final folderId = folder.id!;
-                final cardCount = _cardCounts[folderId] ?? 0;
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth < 360 ? 1 : 2;
 
-                return Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                return GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    mainAxisExtent: 260,
                   ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CardsScreen(folder: folder),
-                        ),
-                      );
-                      await _loadFolders(); // refresh after returning
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _getSuitIcon(folder.folderName),
-                            size: 56,
-                            color: _getSuitColor(folder.folderName),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            folder.folderName,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text('$cardCount cards',
-                              style: TextStyle(color: Colors.grey[600])),
-                          const SizedBox(height: 8),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            color: Colors.red,
-                            onPressed: () => _deleteFolder(folder),
-                            tooltip: 'Delete folder',
-                          ),
-                        ],
+                  itemCount: _folders.length,
+                  itemBuilder: (_, index) {
+                    final folder = _folders[index];
+                    final folderId = folder.id!;
+                    final cardCount = _cardCounts[folderId] ?? 0;
+
+                    return Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                  ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CardsScreen(folder: folder),
+                            ),
+                          );
+                          await _loadFolders(
+                            showLoading: false,
+                          ); // refresh after returning
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                _getSuitImagePath(folder.folderName),
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                folder.folderName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$cardCount cards',
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 8),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                color: Colors.red,
+                                onPressed: () => _deleteFolder(folder),
+                                tooltip: 'Delete folder',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),

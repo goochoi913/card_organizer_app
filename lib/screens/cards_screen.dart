@@ -15,7 +15,6 @@ class CardsScreen extends StatefulWidget {
 
 class _CardsScreenState extends State<CardsScreen> {
   final CardRepository _cardRepository = CardRepository();
-
   List<PlayingCard> _cards = [];
   bool _loading = true;
 
@@ -25,42 +24,21 @@ class _CardsScreenState extends State<CardsScreen> {
     _loadCards();
   }
 
-  Future<void> _loadCards() async {
-    setState(() => _loading = true);
+  Future<void> _loadCards({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _loading = true);
+    }
     final cards = await _cardRepository.getCardsByFolderId(widget.folder.id!);
+    if (!mounted) return;
     setState(() {
       _cards = cards;
       _loading = false;
     });
   }
 
-  Future<void> _confirmDeleteCard(PlayingCard card) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Card?'),
-        content: Text('Delete "${card.cardName} of ${card.suit}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await _cardRepository.deleteCard(card.id!);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Card deleted')));
-      await _loadCards();
-    }
+  Future<void> _deleteCard(PlayingCard card) async {
+    await _cardRepository.deleteCard(card.id!);
+    await _loadCards(showLoading: false);
   }
 
   @override
@@ -78,19 +56,30 @@ class _CardsScreenState extends State<CardsScreen> {
               ),
             ),
           );
-          await _loadCards();
+          await _loadCards(showLoading: false);
         },
         child: const Icon(Icons.add),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.separated(
+          : ReorderableListView.builder(
               itemCount: _cards.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              onReorder: (oldIndex, newIndex) async {
+                // BONUS: DRAG AND DROP LOGIC
+                if (newIndex > oldIndex) newIndex -= 1;
+                final card = _cards.removeAt(oldIndex);
+                _cards.insert(newIndex, card);
+
+                for (int i = 0; i < _cards.length; i++) {
+                  _cards[i] = _cards[i].copyWith(orderIndex: i);
+                }
+                setState(() {});
+                await _cardRepository.updateCardOrders(_cards);
+              },
               itemBuilder: (_, index) {
                 final card = _cards[index];
-
                 return ListTile(
+                  key: ValueKey(card.id), // CRUCIAL FOR DRAG AND DROP
                   leading: SizedBox(
                     width: 56,
                     height: 56,
@@ -105,7 +94,6 @@ class _CardsScreenState extends State<CardsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        tooltip: 'Edit',
                         icon: const Icon(Icons.edit),
                         onPressed: () async {
                           await Navigator.push(
@@ -118,14 +106,14 @@ class _CardsScreenState extends State<CardsScreen> {
                               ),
                             ),
                           );
-                          await _loadCards();
+                          await _loadCards(showLoading: false);
                         },
                       ),
                       IconButton(
-                        tooltip: 'Delete',
                         icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _confirmDeleteCard(card),
+                        onPressed: () => _deleteCard(card),
                       ),
+                      const Icon(Icons.drag_handle, color: Colors.grey),
                     ],
                   ),
                 );
